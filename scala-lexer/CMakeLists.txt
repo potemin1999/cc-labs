@@ -4,4 +4,4 @@ project(cc_labs)
 set(CMAKE_C_STANDARD 99)
 set(CMAKE_CXX_STANDARD 14)
 
-add_executable(cc_labs lexer.c)
+add_executable(pas_lex main.c lexer.c)
