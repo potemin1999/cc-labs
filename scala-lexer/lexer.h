@@ -31,6 +31,8 @@
 /// Contains char *string_value;
 #define TOKEN_STRING_LITERAL 11U
 
+#define TOKEN_EOF            255U
+
 /// boolean type
 typedef int bool_t;
 
@@ -56,6 +58,12 @@ typedef struct {
 } token_t;
 
 /**
+ *
+ * @param input_desc
+ */
+void lex_input(FILE *input_desc);
+
+/**
  * On demand returns next token extracted from the input stream, char by char obtained via lex_next_symbol()
  * Requiring the next char of the input stream will return the next char after the last one of the token
  * Represents
@@ -64,6 +72,13 @@ typedef struct {
 token_t lex_next();
 
 void on_lex_error(const char *error_desc);
+
+/**
+ * String representation of the token
+ * @param token Token to be represented as a string
+ * @return pointer to malloc'd buffer with token string
+ */
+char *token_to_string(token_t *token);
 
 //TODO: add other keywords and fix numbers
 #define KEYWORD_IF      0x00000001U

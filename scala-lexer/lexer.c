@@ -9,16 +9,34 @@
 
 #define REPORT_ERROR_WITH_POS(str) {            \
     size_t str_len = strlen(str);               \
-    char buffer[str_len + 16];                  \
-    sprintf(buffer,"at position %d : %s",str);  \
+    char buffer[str_len + 32];                  \
+    sprintf(buffer,"at position %d : %s",       \
+            input_symbols_ptr,str);             \
     on_lex_error(buffer);                       \
     }
 
-#define COMMIT() --symbols_left;
+#define COMMIT() ++input_symbols_ptr;
 
 #define COMMIT_AND_SHIFT(var_name)          \
-    COMMIT()                         \
+    COMMIT()                                \
     symbol_t var_name = lex_next_symbol();
+
+///returns true, if character is an operator character
+#define IS_OPER(x) (\
+    ((x)=='+') ||   \
+    ((x)=='-') ||   \
+    ((x)=='*') ||   \
+    ((x)=='/') ||   \
+    ((x)=='%') ||   \
+    ((x)=='=') ||   \
+    ((x)=='!') ||   \
+    ((x)=='>') ||   \
+    ((x)=='<') ||   \
+    ((x)=='&') ||   \
+    ((x)=='|') ||   \
+    ((x)=='^') ||   \
+    ((x)=='~')      \
+    )
 
 /// returns 1 if a == "[a-zA-Z]", zero otherwise
 #define IS_LETTER(x) (((x)>='a' && ((x)<='z') || ((x)>='A' && (x)<='Z')) )
@@ -35,6 +53,8 @@
 /// limits the maximum size of literals and identifiers
 #define ACCUM_BUFFER_SIZE 256
 
+FILE *input_file = 0;
+
 /// input buffer
 symbol_t lex_buffer[IN_BUFFER_SIZE];
 
@@ -42,8 +62,10 @@ symbol_t lex_buffer[IN_BUFFER_SIZE];
 symbol_t initial_accum_buffer[ACCUM_BUFFER_SIZE];
 symbol_t *accum_buffer = initial_accum_buffer;
 
-/// indirectly points to the out_buffer position
-int32_t symbols_left = 0;
+/// count of read symbols in the buffer
+int32_t input_symbols_size = 0;
+/// points to the out_buffer position
+int32_t input_symbols_ptr = 0;
 
 /// current size of the accumulation buffer
 int32_t accum_symbols_size = 0;
@@ -56,14 +78,27 @@ int32_t accum_symbols_cap = ACCUM_BUFFER_SIZE;
  * @return next symbol of lexer input stream
  */
 symbol_t lex_next_symbol() {
-    if (symbols_left == 0) {
-        symbols_left = fread(lex_buffer, IN_BUFFER_SIZE, 1, stdin);
-        if (symbols_left == 0) {
-            symbols_left = -1;
-            return 0;
-        }
+    if (input_file == 0) {
+        input_file = stdin;
     }
-    return lex_buffer[IN_BUFFER_SIZE - symbols_left];
+    FILE *file = input_file;
+    int a = (file == stdin);
+    size_t input_ptr = input_symbols_ptr;
+    size_t input_size = input_symbols_size;
+    if (input_symbols_ptr >= input_symbols_size) {
+        input_symbols_size = fread(lex_buffer, 1, IN_BUFFER_SIZE, input_file);
+        if (input_symbols_size == 0) {
+            int code = 0;
+            if (code = ferror(input_file)) {
+                printf("error %d occurred while reading\n", code);
+            }
+            input_symbols_size = 0;
+            return '\0';
+        }
+        input_symbols_ptr = 0;
+    }
+    symbol_t ret = lex_buffer[input_symbols_ptr];
+    return ret;
 }
 
 /**
@@ -71,7 +106,7 @@ symbol_t lex_next_symbol() {
  * @param symbol Symbol to save
  * @return new accum_symbols_size
  */
-int lex_accum_symbol(symbol_t symbol) {
+static inline int lex_accum_symbol(symbol_t symbol) {
     if (accum_symbols_size == accum_symbols_cap) {
         if (accum_symbols_size == ACCUM_BUFFER_SIZE) {
             accum_buffer = malloc(sizeof(symbol_t) * accum_symbols_cap * 2);
@@ -91,6 +126,10 @@ int lex_accum_symbol(symbol_t symbol) {
  * @return size of read operator in symbols
  */
 size_t lex_build_operator(symbol_t first, uint32_t *operator_out);
+
+void lex_input(FILE *input_desc) {
+    input_file = input_desc;
+}
 
 token_t lex_next() {
     // main function of the lexer
@@ -113,6 +152,10 @@ token_t lex_next() {
                 REPORT_ERROR_WITH_POS("newlines are not allowed in back-quoted identifiers")
                 break;
             }
+            if (next == '\0') { //eof is unexpected
+                REPORT_ERROR_WITH_POS("eof while reading back-quoted identifier");
+                break;
+            }
             lex_accum_symbol(next);
             next = lex_next_symbol();
         }
@@ -123,6 +166,7 @@ token_t lex_next() {
             char *ident_value = malloc(n_size);
             memcpy(ident_value, accum_buffer, n_size);
             bzero(accum_buffer, n_size);
+            accum_symbols_size = 0;
             token.type = TOKEN_IDENTIFIER;
             token.ident_value = ident_value;
             return token;
@@ -130,13 +174,51 @@ token_t lex_next() {
             return token;
         }
     }
+    if (IS_OPER(c1)) {
+        // operator identifier begins with operator character
+        lex_accum_symbol(c1);
+        COMMIT()
+        symbol_t next = lex_next_symbol();
+        while (IS_OPER(next)) {
+            lex_accum_symbol(next);
+            COMMIT()
+            next = lex_next_symbol();
+        }
+        size_t n_size = sizeof(symbol_t) * accum_symbols_size;
+        char *ident_value = malloc(n_size);
+        memcpy(ident_value, accum_buffer, n_size);
+        bzero(accum_buffer, n_size);
+        accum_symbols_size = 0;
+        token.type = TOKEN_IDENTIFIER;
+        token.ident_value = ident_value;
+        return token;
+    }
     if (IS_LETTER(c1) || c1 == '_' || c1 == '$') {
         // keyword or identifier
-
+    }
+    if (c1 == '\0') {
+        token.type = TOKEN_EOF;
     }
     return token;
 }
 
+char *token_to_string(token_t *token) {
+    switch (token->type) {
+        case TOKEN_IDENTIFIER: {
+            char *ident = token->ident_value;
+            size_t ident_len = strlen(ident);
+            char *buffer = malloc(ident_len + 16);
+            sprintf(buffer, "<ident=%s>", ident);
+            return buffer;
+        }
+        case TOKEN_EOF: {
+            return strdup("<eof>");
+        }
+        default: {
+            return strdup("<no-type>");
+        }
+    }
+}
 
 #define WRITE_OP_AND_RET(size, op) { *operator_out = op; return size; }
 
