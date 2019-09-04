@@ -31,6 +31,9 @@
 /// Contains char *string_value;
 #define TOKEN_STRING_LITERAL 11U
 
+/// Char literal
+#define TOKEN_CHAR_LITERAL  12U
+
 #define TOKEN_EOF            255U
 
 /// boolean type
@@ -52,6 +55,7 @@ typedef struct {
         bool_t bool_value;
         uint32_t int_value;
         char *float_value;
+        uint32_t char_value;
         char *string_value;
     };
     char *ident_value;

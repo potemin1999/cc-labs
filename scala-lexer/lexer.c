@@ -2,9 +2,11 @@
 // Created by Ilya Potemin on 8/30/19.
 //
 
+#include <locale.h>
 #include <stdio.h>
 #include <string.h>
 #include <malloc.h>
+#include <wchar.h>
 #include "lexer.h"
 
 #define REPORT_ERROR_WITH_POS(str) {            \
@@ -20,6 +22,9 @@
 #define COMMIT_AND_SHIFT(var_name)          \
     COMMIT()                                \
     symbol_t var_name = lex_next_symbol();
+
+#define HEX_TO_INT(x) (x) < 58 ? (x) - 48 : \
+    ((x) > 96 ? (x) - 87 : (x) - 55)
 
 /// returns true, if character is a digit
 #define IS_DIGIT(x) ((x)>='0' && (x)<='9')
@@ -292,6 +297,48 @@ token_t lex_next() {
             return token;
         }
     }
+    if (c1 == '\'') {
+        // character literal is expected
+        COMMIT()
+        symbol_t c2 = lex_next_symbol();
+        COMMIT()
+        if (c2 == '\\') {
+            // escape or unicode symbol
+            symbol_t c3 = lex_next_symbol();
+            if (c3 == 'u') {
+                // unicode symbol
+                COMMIT_AND_SHIFT(u1)
+                COMMIT_AND_SHIFT(u2)
+                COMMIT_AND_SHIFT(u3)
+                COMMIT_AND_SHIFT(u4)
+                uint8_t u1_val = HEX_TO_INT(u1);
+                uint8_t u2_val = HEX_TO_INT(u2);
+                uint8_t u3_val = HEX_TO_INT(u3);
+                uint8_t u4_val = HEX_TO_INT(u4);
+                token.char_value =
+                        (u1_val << 12U) +
+                        (u2_val << 8U) +
+                        (u3_val << 4U) +
+                        (u4_val);
+                COMMIT()
+            } else {
+                COMMIT()
+                symbol_t *s = (symbol_t *) &token.char_value;
+                *s = '\\';
+                *(s + 1) = c3;
+            }
+        } else {
+            token.char_value = c2;
+        }
+        symbol_t last = lex_next_symbol();
+        if (last != '\'') {
+            REPORT_ERROR_WITH_POS(" closing single quote expected")
+            return token;
+        }
+        COMMIT()
+        token.type = TOKEN_CHAR_LITERAL;
+        return token;
+    }
     if (c1 == '\0') {
         token.type = TOKEN_EOF;
     }
@@ -320,6 +367,23 @@ char *token_to_string(token_t *token) {
             sprintf(buffer, "<literal(float)=%s>", float_val);
             return buffer;
         }
+        case TOKEN_CHAR_LITERAL: {
+            uint32_t value = token->char_value;
+            char *buffer = malloc(32);
+            uint8_t *value_ptr = &value;
+            if (value > 256) {
+                if (value_ptr[0] == '\\') {
+                    sprintf(buffer, "<literal(char|escape)=\\%c>", value_ptr[1]);
+                } else {
+                    setlocale(LC_ALL, "");
+                    wchar_t wchar = (wchar_t) value_ptr + 2;
+                    sprintf(buffer, "<literal(char|unicode)=%lc>", wchar);
+                }
+            } else {
+                sprintf(buffer, "<literal(char)=%c>", value);
+            }
+            return buffer;
+        }
         case TOKEN_EOF: {
             return strdup("<eof>");
         }
@@ -339,8 +403,7 @@ int build_integer_literal(token_t *token, uint8_t is_hex) {
     while (current > end) {
         symbol_t x = accum_buffer[current];
         int x_int = x;
-        uint32_t inc = x < 58 ? x - 48 :
-                       (x > 96 ? x - 87 : x - 55);
+        uint32_t inc = HEX_TO_INT(x);
         value += inc * mul;
         mul *= mul_mul;
         --current;
