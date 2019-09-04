@@ -145,6 +145,8 @@ int build_integer_literal(token_t *token, uint8_t is_hex);
 
 int build_float_literal(token_t *token, uint8_t has_exponent, uint8_t is_double);
 
+int build_string_literal(token_t *token, uint8_t has_trailing_quotes);
+
 void lex_input(FILE *input_desc) {
     input_file = input_desc;
 }
@@ -339,6 +341,50 @@ token_t lex_next() {
         token.type = TOKEN_CHAR_LITERAL;
         return token;
     }
+    if (c1 == '"') {
+        // string literal starting
+        COMMIT()
+        symbol_t s = lex_next_symbol();
+        if (s == '"') {
+            // empty string or a multiline literal
+            COMMIT_AND_SHIFT(s2)
+            if (s2 == '"') {
+                // multiline literal
+                COMMIT()
+                s = lex_next_symbol();
+                int counter = 0;
+                do {
+                    lex_accum_symbol(s);
+                    if (s == '"') {
+                        ++counter;
+                    } else {
+                        counter = 0;
+                    }
+                    COMMIT()
+                    s = lex_next_symbol();
+                } while (counter < 3);
+                build_string_literal(&token, 1);
+            } else {
+                // empty string
+                build_string_literal(&token, 0);
+            }
+        } else {
+            symbol_t prev = 0;
+            do {
+                lex_accum_symbol(s);
+                COMMIT()
+                prev = s;
+                s = lex_next_symbol();
+                int i = 0;
+                if (s == '"' && prev != '\\') {
+                    break;
+                }
+            } while (s != 0);
+            COMMIT()
+            build_string_literal(&token, 0);
+        }
+        return token;
+    }
     if (c1 == '\0') {
         token.type = TOKEN_EOF;
     }
@@ -370,7 +416,7 @@ char *token_to_string(token_t *token) {
         case TOKEN_CHAR_LITERAL: {
             uint32_t value = token->char_value;
             char *buffer = malloc(32);
-            uint8_t *value_ptr = &value;
+            uint8_t *value_ptr = (uint8_t *) &value;
             if (value > 256) {
                 if (value_ptr[0] == '\\') {
                     sprintf(buffer, "<literal(char|escape)=\\%c>", value_ptr[1]);
@@ -382,6 +428,13 @@ char *token_to_string(token_t *token) {
             } else {
                 sprintf(buffer, "<literal(char)=%c>", value);
             }
+            return buffer;
+        }
+        case TOKEN_STRING_LITERAL: {
+            char *str = token->string_value;
+            size_t str_len = strlen(str);
+            char *buffer = malloc(str_len + 24);
+            sprintf(buffer, "<literal(string)=%s>", str);
             return buffer;
         }
         case TOKEN_EOF: {
@@ -421,6 +474,17 @@ int build_float_literal(token_t *token, uint8_t has_exponent, uint8_t is_double)
     accum_symbols_size = 0;
     token->type = TOKEN_FLOAT_LITERAL;
     token->float_value = float_value;
+    return 0;
+}
+
+int build_string_literal(token_t *token, uint8_t has_trailing_quotes) {
+    size_t n_size = sizeof(symbol_t) * (accum_symbols_size - (has_trailing_quotes ? 3 : 0));
+    char *str_value = malloc(n_size);
+    memcpy(str_value, accum_buffer, n_size);
+    bzero(accum_buffer, n_size);
+    accum_symbols_size = 0;
+    token->type = TOKEN_STRING_LITERAL;
+    token->float_value = str_value;
     return 0;
 }
 
