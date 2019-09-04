@@ -50,8 +50,8 @@ typedef struct {
         uint32_t keyword;
         uint32_t operator;
         bool_t bool_value;
-        int32_t int_value;
-        float float_value;
+        uint32_t int_value;
+        char *float_value;
         char *string_value;
     };
     char *ident_value;

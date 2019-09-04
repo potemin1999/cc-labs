@@ -21,6 +21,15 @@
     COMMIT()                                \
     symbol_t var_name = lex_next_symbol();
 
+/// returns true, if character is a digit
+#define IS_DIGIT(x) ((x)>='0' && (x)<='9')
+
+// returns true, if character is a digit or [a-fA-F]
+#define IS_HEX_DIGIT(x)         \
+    (IS_DIGIT(x)) ||            \
+    ((x)>='a' && (x<='f')) ||   \
+    ((x)>='A' && (x<='F'))      \
+
 ///returns true, if character is an operator character
 #define IS_OPER(x) (\
     ((x)=='+') ||   \
@@ -127,6 +136,10 @@ static inline int lex_accum_symbol(symbol_t symbol) {
  */
 size_t lex_build_operator(symbol_t first, uint32_t *operator_out);
 
+int build_integer_literal(token_t *token, uint8_t is_hex);
+
+int build_float_literal(token_t *token, uint8_t has_exponent, uint8_t is_double);
+
 void lex_input(FILE *input_desc) {
     input_file = input_desc;
 }
@@ -196,6 +209,89 @@ token_t lex_next() {
     if (IS_LETTER(c1) || c1 == '_' || c1 == '$') {
         // keyword or identifier
     }
+    if (IS_DIGIT(c1)) {
+        // integer or float literal
+        lex_accum_symbol(c1);
+        COMMIT()
+        goto skip_parse_float_literal;
+
+        start_parse_float_literal:;
+        // we have float literal
+        // save it as string
+        symbol_t s = lex_next_symbol();
+        do {
+            lex_accum_symbol(s);
+            COMMIT()
+            s = lex_next_symbol();
+            // check all allowed symbols in this literal
+        } while (IS_DIGIT(s) || s == '.' ||
+                 s == 'e' || s == 'E' || s == '-' || s == '+' ||
+                 s == 'F' || s == 'f' || s == 'D' || s == 'd');
+        build_float_literal(&token, 0, 0);
+        return token;
+
+        skip_parse_float_literal:
+        if (c1 == '0') {
+            // check hex numeral case
+            symbol_t c2 = lex_next_symbol();
+            if (c2 == 'x' || c2 == 'X') {
+                // integer hex literal for sure
+                lex_accum_symbol(c2);
+                COMMIT()
+                symbol_t hex_num = lex_next_symbol();
+                // first symbol after x|X should be hex literal
+                if (!IS_HEX_DIGIT(hex_num)) {
+                    REPORT_ERROR_WITH_POS("expected hex numeral")
+                    return token;
+                }
+                // while we have hex numerals, process the input
+                do {
+                    lex_accum_symbol(hex_num);
+                    COMMIT()
+                    hex_num = lex_next_symbol();
+                } while (IS_HEX_DIGIT(hex_num));
+                // return token
+                if (hex_num == 'l' || hex_num == 'L') {
+                    // skip the l|L at the end
+                    COMMIT()
+                }
+                build_integer_literal(&token, 1);
+                return token;
+            } else {
+                if (IS_DIGIT(c2) || c2 == '.' ||
+                    c2 == 'E' || c2 == 'e') {
+                    lex_accum_symbol(c2);
+                    COMMIT()
+                    goto start_parse_float_literal;
+                }
+                if (c2 == 'l' || c2 == 'L') {
+                    COMMIT()
+                }
+                build_integer_literal(&token, 0);
+                return token;
+            }
+        } else {
+            // first digit is not a zero, we can accept any non-hex digits further
+            symbol_t hex_num = lex_next_symbol();
+            do {
+                lex_accum_symbol(hex_num);
+                COMMIT()
+                hex_num = lex_next_symbol();
+                if (IS_DIGIT(hex_num)) {
+                    continue;
+                }
+            } while (IS_DIGIT(hex_num));
+
+            if (hex_num == 'l' || hex_num == 'L') {
+                COMMIT()
+            } else {
+                // we received symbol, which can be found in float literal only (or not)
+                goto start_parse_float_literal;
+            }
+            build_integer_literal(&token, 0);
+            return token;
+        }
+    }
     if (c1 == '\0') {
         token.type = TOKEN_EOF;
     }
@@ -211,6 +307,19 @@ char *token_to_string(token_t *token) {
             sprintf(buffer, "<ident=%s>", ident);
             return buffer;
         }
+        case TOKEN_INT_LITERAL: {
+            uint32_t value = token->int_value;
+            char *buffer = malloc(32);
+            sprintf(buffer, "<literal(integer)=%d>", value);
+            return buffer;
+        }
+        case TOKEN_FLOAT_LITERAL: {
+            char *float_val = token->float_value;
+            size_t float_len = strlen(float_val);
+            char *buffer = malloc(float_len + 32);
+            sprintf(buffer, "<literal(float)=%s>", float_val);
+            return buffer;
+        }
         case TOKEN_EOF: {
             return strdup("<eof>");
         }
@@ -218,6 +327,38 @@ char *token_to_string(token_t *token) {
             return strdup("<no-type>");
         }
     }
+}
+
+int build_integer_literal(token_t *token, uint8_t is_hex) {
+    size_t current = accum_symbols_size - 1;
+    uint32_t value = 0;
+    uint32_t mul = 1;
+    int32_t end = is_hex ? 1 : -1;
+    uint32_t mul_mul = is_hex ? 16 : 10;
+    // read until the x|X expected at position 1
+    while (current > end) {
+        symbol_t x = accum_buffer[current];
+        int x_int = x;
+        uint32_t inc = x < 58 ? x - 48 :
+                       (x > 96 ? x - 87 : x - 55);
+        value += inc * mul;
+        mul *= mul_mul;
+        --current;
+    }
+    token->type = TOKEN_INT_LITERAL;
+    token->int_value = value;
+    return 0;
+}
+
+int build_float_literal(token_t *token, uint8_t has_exponent, uint8_t is_double) {
+    size_t n_size = sizeof(symbol_t) * accum_symbols_size;
+    char *float_value = malloc(n_size);
+    memcpy(float_value, accum_buffer, n_size);
+    bzero(accum_buffer, n_size);
+    accum_symbols_size = 0;
+    token->type = TOKEN_FLOAT_LITERAL;
+    token->float_value = float_value;
+    return 0;
 }
 
 #define WRITE_OP_AND_RET(size, op) { *operator_out = op; return size; }
