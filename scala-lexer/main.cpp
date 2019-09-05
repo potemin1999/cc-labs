@@ -27,6 +27,7 @@ int main(int argc, const char **argv) {
         char *tok_str = token_to_string(&token);
         printf("%s ", tok_str);
         free(tok_str);
+
     } while (token.type != TOKEN_EOF && token.type);
     return 0;
 }

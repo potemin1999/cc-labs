@@ -1,1 +1,7 @@
-`hello`++=
+/* 7 */
+def
+/*
+*
+*fefwfnullwef
+*/
+def
