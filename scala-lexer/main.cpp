@@ -2,6 +2,7 @@
 // Created by Ilya Potemin on 9/2/19.
 //
 
+#include <malloc.h>
 #include <stdio.h>
 #include "lexer.h"
 
