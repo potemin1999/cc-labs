@@ -1,3 +1,4 @@
+
 //
 // Created by Ilya Potemin on 8/30/19.
 //
@@ -38,6 +39,8 @@
     ((x)=='~')      \
     )
 
+#define IS_DIGIT(x) false
+
 /// returns 1 if a == "[a-zA-Z]", zero otherwise
 #define IS_LETTER(x) (((x)>='a' && ((x)<='z') || ((x)>='A' && (x)<='Z')) )
 
@@ -71,6 +74,35 @@ int32_t input_symbols_ptr = 0;
 int32_t accum_symbols_size = 0;
 int32_t accum_symbols_cap = ACCUM_BUFFER_SIZE;
 
+
+bool isKeyword() {
+    char keywords[50][10] = {"abstract", "case", "catch", "class", "def",
+                             "do", "else", "extends", "false", "final",
+                             "finally", "for", "forSome", "if", "implicit",
+                             "import", "lazy", "macro", "match", "new",
+                             "null", "object", "override", "package", "private",
+                             "protected", "return", "sealed", "super", "this",
+                             "throw", "trait", "try", "true", "type",
+                             "val", "var", "while", "with", "yield",
+                             "_", ":", "=", "=>", "<-", "<:", "<%", ">:", "#", "@"};
+    int i, flag = 0;
+    for (i = 0; i < 32; ++i) {
+        if (strcmp(keywords[i], accum_buffer) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+//give him a word or char
+
+int isIdentifier(char buffer[]) {
+    char underscore = '_';
+    char dollar = '$';
+
+    int i, flag = 0;
+
+//    if(isalpha((buffer[0])) )
+}
 
 /**
  * On demand returns next symbol of the input stream via block reading of descriptor input data flow
@@ -109,9 +141,9 @@ symbol_t lex_next_symbol() {
 static inline int lex_accum_symbol(symbol_t symbol) {
     if (accum_symbols_size == accum_symbols_cap) {
         if (accum_symbols_size == ACCUM_BUFFER_SIZE) {
-            accum_buffer = malloc(sizeof(symbol_t) * accum_symbols_cap * 2);
+            accum_buffer = (symbol_t *) malloc(sizeof(symbol_t) * accum_symbols_cap * 2);
         } else {
-            accum_buffer = realloc(accum_buffer, sizeof(symbol_t) * accum_symbols_cap * 2);
+            accum_buffer = (symbol_t *) realloc(accum_buffer, sizeof(symbol_t) * accum_symbols_cap * 2);
         }
     }
     accum_buffer[accum_symbols_size] = symbol;
@@ -133,13 +165,12 @@ void lex_input(FILE *input_desc) {
 
 token_t lex_next() {
     // main function of the lexer
-    token_t token = {
-            // non-initialized token type
-            .type = 0,
-            // initialize only ident_value since pointer
-            // has equal or the most size in the union
-            .ident_value = 0
-    };
+    token_t token;
+    // non-initialized token type
+    token.type = 0;
+    // initialize only ident_value since pointer
+    // has equal or the most size in the union
+    token.ident_value = nullptr;
     symbol_t c1 = lex_next_symbol();
     if (IS_BACKQUOTE(c1)) {
         // back quote starting identifier, read everything until next backquote
@@ -163,7 +194,8 @@ token_t lex_next() {
         if (IS_BACKQUOTE(next)) {
             COMMIT()
             size_t n_size = sizeof(token_t) * accum_symbols_size;
-            char *ident_value = malloc(n_size);
+            char *ident_value = new char[n_size+1];
+            bzero(ident_value, n_size+1);
             memcpy(ident_value, accum_buffer, n_size);
             bzero(accum_buffer, n_size);
             accum_symbols_size = 0;
@@ -185,7 +217,8 @@ token_t lex_next() {
             next = lex_next_symbol();
         }
         size_t n_size = sizeof(symbol_t) * accum_symbols_size;
-        char *ident_value = malloc(n_size);
+        char *ident_value = new char[n_size+1];
+        bzero(ident_value, n_size+1);
         memcpy(ident_value, accum_buffer, n_size);
         bzero(accum_buffer, n_size);
         accum_symbols_size = 0;
@@ -195,6 +228,28 @@ token_t lex_next() {
     }
     if (IS_LETTER(c1) || c1 == '_' || c1 == '$') {
         // keyword or identifier
+        lex_accum_symbol(c1);
+        COMMIT()
+        symbol_t next = lex_next_symbol();
+        while (IS_LETTER(next) || IS_DIGIT(next) ||
+               c1 == '_' || c1 == '$') {
+            lex_accum_symbol(next);
+            COMMIT()
+            next = lex_next_symbol();
+        }
+        size_t n_size = sizeof(symbol_t) * accum_symbols_size;
+        char *str_value = new char[n_size+1];
+        bzero(str_value, n_size+1);
+        memcpy(str_value, accum_buffer, n_size);
+        if (isKeyword()) {
+            token.type = TOKEN_KEYWORD;
+        }else{
+            token.type = TOKEN_IDENTIFIER;
+        }
+        bzero(accum_buffer, n_size);
+        accum_symbols_size = 0;
+        token.ident_value = str_value;
+        return token;
     }
     if (c1 == '\0') {
         token.type = TOKEN_EOF;
@@ -207,8 +262,15 @@ char *token_to_string(token_t *token) {
         case TOKEN_IDENTIFIER: {
             char *ident = token->ident_value;
             size_t ident_len = strlen(ident);
-            char *buffer = malloc(ident_len + 16);
+            char *buffer = (char *) malloc(ident_len + 16);
             sprintf(buffer, "<ident=%s>", ident);
+            return buffer;
+        }
+        case TOKEN_KEYWORD: {
+            char *kw = token->ident_value;
+            size_t ident_len = strlen(kw);
+            char *buffer = (char *) malloc(ident_len + 16);
+            sprintf(buffer, "<keyword=%s>", kw);
             return buffer;
         }
         case TOKEN_EOF: {

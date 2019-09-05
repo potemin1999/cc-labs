@@ -48,7 +48,7 @@ typedef struct {
     uint8_t type;
     union {
         uint32_t keyword;
-        uint32_t operator;
+        uint32_t oper;
         bool_t bool_value;
         int32_t int_value;
         float float_value;
