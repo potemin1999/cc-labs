@@ -211,8 +211,8 @@ token_t lex_next() {
         if (IS_BACKQUOTE(next)) {
             COMMIT()
             size_t n_size = sizeof(token_t) * accum_symbols_size;
-            char *ident_value = new char[n_size+1];
-            bzero(ident_value, n_size+1);
+            char *ident_value = new char[n_size + 1];
+            bzero(ident_value, n_size + 1);
             memcpy(ident_value, accum_buffer, n_size);
             bzero(accum_buffer, n_size);
             accum_symbols_size = 0;
@@ -234,8 +234,8 @@ token_t lex_next() {
             next = lex_next_symbol();
         }
         size_t n_size = sizeof(symbol_t) * accum_symbols_size;
-        char *ident_value = new char[n_size+1];
-        bzero(ident_value, n_size+1);
+        char *ident_value = new char[n_size + 1];
+        bzero(ident_value, n_size + 1);
         memcpy(ident_value, accum_buffer, n_size);
         bzero(accum_buffer, n_size);
         accum_symbols_size = 0;
@@ -255,12 +255,12 @@ token_t lex_next() {
             next = lex_next_symbol();
         }
         size_t n_size = sizeof(symbol_t) * accum_symbols_size;
-        char *str_value = new char[n_size+1];
-        bzero(str_value, n_size+1);
+        char *str_value = new char[n_size + 1];
+        bzero(str_value, n_size + 1);
         memcpy(str_value, accum_buffer, n_size);
         if (isKeyword()) {
             token.type = TOKEN_KEYWORD;
-        }else{
+        } else {
             token.type = TOKEN_IDENTIFIER;
         }
         bzero(accum_buffer, n_size);
@@ -272,12 +272,13 @@ token_t lex_next() {
         // integer or float literal
         lex_accum_symbol(c1);
         COMMIT()
+        symbol_t s;
         goto skip_parse_float_literal;
 
         start_parse_float_literal:;
         // we have float literal
         // save it as string
-        symbol_t s = lex_next_symbol();
+        s = lex_next_symbol();
         do {
             lex_accum_symbol(s);
             COMMIT()
@@ -448,41 +449,41 @@ char *token_to_string(token_t *token) {
         case TOKEN_IDENTIFIER: {
             char *ident = token->ident_value;
             size_t ident_len = strlen(ident);
-            char *buffer = (char *) malloc(ident_len + 16);
+            auto buffer = new char[ident_len + 16];
             sprintf(buffer, "<ident=%s>", ident);
             return buffer;
         }
         case TOKEN_KEYWORD: {
             char *kw = token->ident_value;
             size_t ident_len = strlen(kw);
-            char *buffer = (char *) malloc(ident_len + 16);
+            auto buffer = new char[ident_len + 16];
             sprintf(buffer, "<keyword=%s>", kw);
             return buffer;
         }
         case TOKEN_INT_LITERAL: {
             uint32_t value = token->int_value;
-            char *buffer = malloc(32);
+            auto buffer = new char[32];
             sprintf(buffer, "<literal(integer)=%d>", value);
             return buffer;
         }
         case TOKEN_FLOAT_LITERAL: {
             char *float_val = token->float_value;
             size_t float_len = strlen(float_val);
-            char *buffer = malloc(float_len + 32);
+            auto buffer = new char[float_len + 32];
             sprintf(buffer, "<literal(float)=%s>", float_val);
             return buffer;
         }
         case TOKEN_CHAR_LITERAL: {
             uint32_t value = token->char_value;
-            char *buffer = malloc(32);
-            uint8_t *value_ptr = (uint8_t *) &value;
+            auto buffer = new char[32];
+            auto *value_ptr = (uint8_t *) &value;
             if (value > 256) {
                 if (value_ptr[0] == '\\') {
                     sprintf(buffer, "<literal(char|escape)=\\%c>", value_ptr[1]);
                 } else {
                     setlocale(LC_ALL, "");
-                    wchar_t wchar = (wchar_t) value_ptr + 2;
-                    sprintf(buffer, "<literal(char|unicode)=%lc>", wchar);
+                    wchar_t *wchar = (wchar_t *) (value_ptr + 2);
+                    sprintf(buffer, "<literal(char|unicode)=%lc>", *wchar);
                 }
             } else {
                 sprintf(buffer, "<literal(char)=%c>", value);
@@ -492,7 +493,7 @@ char *token_to_string(token_t *token) {
         case TOKEN_STRING_LITERAL: {
             char *str = token->string_value;
             size_t str_len = strlen(str);
-            char *buffer = malloc(str_len + 24);
+            auto buffer = new char[str_len + 24];
             sprintf(buffer, "<literal(string)=%s>", str);
             return buffer;
         }
