@@ -59,6 +59,8 @@ typedef struct {
         char *string_value;
     };
     char *ident_value;
+    int line;
+    int offset;
 } token_t;
 
 /**

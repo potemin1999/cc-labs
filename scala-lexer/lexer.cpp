@@ -85,6 +85,10 @@ int32_t input_symbols_ptr = 0;
 int32_t accum_symbols_size = 0;
 int32_t accum_symbols_cap = ACCUM_BUFFER_SIZE;
 
+/// Line number and offset calculation required variables
+int new_lines_num = 0;
+int last_new_line_pos = -1;
+
 
 bool isKeyword() {
     char keywords[50][10] = {"abstract", "case", "catch", "class", "def",
@@ -140,6 +144,10 @@ symbol_t lex_next_symbol() {
         }
         input_symbols_ptr = 0;
     }
+    if ((char)lex_buffer[input_symbols_ptr] == '\n' && input_symbols_ptr != last_new_line_pos){
+        new_lines_num ++;
+        last_new_line_pos = input_symbols_ptr;
+    }
     symbol_t ret = lex_buffer[input_symbols_ptr];
     return ret;
 }
@@ -189,6 +197,12 @@ token_t lex_next() {
     // has equal or the most size in the union
     token.ident_value = nullptr;
     symbol_t c1 = lex_next_symbol();
+    // retrieving current line number and offset and adding to the token
+    // int curr_line = new_lines_num + 1;
+    // int curr_offset = input_symbols_ptr - last_new_line_pos + 1;
+    token.line = new_lines_num + 1;
+    token.offset = input_symbols_ptr - last_new_line_pos + 1;
+
     if (IS_BACKQUOTE(c1)) {
         // back quote starting identifier, read everything until next backquote
         // newlines are not allowed
@@ -445,57 +459,83 @@ token_t lex_next() {
 }
 
 char *token_to_string(token_t *token) {
+    char* buffer = NULL;
+    // Additional data to add
+    // char* to_add 
+
+    char *token_name, *token_val;
+
     switch (token->type) {
         case TOKEN_IDENTIFIER: {
             char *ident = token->ident_value;
             size_t ident_len = strlen(ident);
-            auto buffer = new char[ident_len + 16];
-            sprintf(buffer, "<ident=%s>", ident);
-            return buffer;
+            buffer = new char[ident_len + 16];
+            // sprintf(buffer, "<ident=%s>", ident);
+            token_name = strdup("ident");
+            token_val = strdup(ident);
+            break;
         }
         case TOKEN_KEYWORD: {
             char *kw = token->ident_value;
             size_t ident_len = strlen(kw);
-            auto buffer = new char[ident_len + 16];
-            sprintf(buffer, "<keyword=%s>", kw);
-            return buffer;
+            buffer = new char[ident_len + 16];
+            // sprintf(buffer, "<keyword=%s>", kw);
+            token_name = strdup("keyword");
+            token_val = strdup(kw);
+            break;
         }
         case TOKEN_INT_LITERAL: {
             uint32_t value = token->int_value;
-            auto buffer = new char[32];
-            sprintf(buffer, "<literal(integer)=%d>", value);
-            return buffer;
+            buffer = new char[32];
+            // sprintf(buffer, "<literal(integer)=%d>", value);
+            token_name = strdup("literal(integer)");
+            token_val = new char[256];
+            sprintf(token_val, "%d", value);
+            break;
         }
         case TOKEN_FLOAT_LITERAL: {
             char *float_val = token->float_value;
             size_t float_len = strlen(float_val);
-            auto buffer = new char[float_len + 32];
-            sprintf(buffer, "<literal(float)=%s>", float_val);
-            return buffer;
+            buffer = new char[float_len + 32];
+            // sprintf(buffer, "<literal(float)=%s>", float_val);
+            token_name = strdup("literal(float)");
+            token_val = strdup(float_val);
+            break;
         }
         case TOKEN_CHAR_LITERAL: {
             uint32_t value = token->char_value;
-            auto buffer = new char[32];
+            buffer = new char[32];
             auto *value_ptr = (uint8_t *) &value;
             if (value > 256) {
                 if (value_ptr[0] == '\\') {
-                    sprintf(buffer, "<literal(char|escape)=\\%c>", value_ptr[1]);
+                    // sprintf(buffer, "<literal(char|escape)=\\%c>", value_ptr[1]);
+                    token_name = strdup("literal(char|escape)");
+                    token_val = new char[256];
+                    sprintf(token_val, "%c", value_ptr[1]);
                 } else {
                     setlocale(LC_ALL, "");
                     wchar_t *wchar = (wchar_t *) (value_ptr + 2);
-                    sprintf(buffer, "<literal(char|unicode)=%lc>", *wchar);
+                    // sprintf(buffer, "<literal(char|unicode)=%lc>", *wchar);
+                    token_name = strdup("literal(char|unicode)");
+                    token_val = new char[256];
+                    sprintf(token_val, "%lc", *wchar);
                 }
             } else {
-                sprintf(buffer, "<literal(char)=%c>", value);
+                // sprintf(buffer, "<literal(char)=%c>", value);
+                token_name = strdup("literal(char)");
+                token_val = new char[256];
+                sprintf(token_val, "%c", value);
             }
-            return buffer;
+            break;
         }
         case TOKEN_STRING_LITERAL: {
             char *str = token->string_value;
             size_t str_len = strlen(str);
-            auto buffer = new char[str_len + 24];
-            sprintf(buffer, "<literal(string)=%s>", str);
-            return buffer;
+            buffer = new char[str_len + 24];
+            // sprintf(buffer, "<literal(string)=%s>", str);
+            token_name = strdup("literal(string)");
+            token_val = strdup(str);
+            break;
         }
         case TOKEN_EOF: {
             return strdup("<eof>");
@@ -504,6 +544,14 @@ char *token_to_string(token_t *token) {
             return strdup("<no-type>");
         }
     }
+
+    char token_template[] = "<%s=%s %d:%d>";
+    buffer = new char[strlen(token_template) + strlen(token_name) + strlen(token_val) + 256];
+    sprintf(buffer, token_template, token_name, token_val, token->line, token->offset);
+    delete token_name;
+    delete token_val;
+
+    return buffer;
 }
 
 int build_integer_literal(token_t *token, uint8_t is_hex) {
