@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <malloc.h>
+#include <cstdlib>
 #include <wchar.h>
 #include "lexer.h"
 
@@ -18,6 +19,10 @@
     }
 
 #define COMMIT() ++input_symbols_ptr;
+
+#define COMMENT_CHECK(c1)                   \
+    comment_skipping(c1);                   \
+    c1 = lex_next_symbol();
 
 #define COMMIT_AND_SHIFT(var_name)          \
     COMMIT()                                \
@@ -152,6 +157,30 @@ symbol_t lex_next_symbol() {
     return ret;
 }
 
+symbol_t peek() {
+    if (input_file == 0) {
+        input_file = stdin;
+    }
+    FILE *file = input_file;
+    int a = (file == stdin);
+    size_t input_ptr = input_symbols_ptr;
+    size_t input_size = input_symbols_size;
+    if (input_symbols_ptr >= input_symbols_size) {
+        input_symbols_size = fread(lex_buffer, 1, IN_BUFFER_SIZE, input_file);
+        if (input_symbols_size == 0) {
+            int code = 0;
+            if (code = ferror(input_file)) {
+                printf("error %d occurred while reading\n", code);
+            }
+            input_symbols_size = 0;
+            return '\0';
+        }
+        input_symbols_ptr = 0;
+    }
+    symbol_t ret = lex_buffer[input_symbols_ptr + 1];
+    return ret;
+}
+
 /**
  * Saves symbol to the accumulation buffer
  * @param symbol Symbol to save
@@ -188,6 +217,51 @@ void lex_input(FILE *input_desc) {
     input_file = input_desc;
 }
 
+void comment_skipping(symbol_t c1) {
+    if (c1 == '/') {
+        if (peek() != '/' && peek() != '*')
+            return;
+        COMMIT()
+        c1 = lex_next_symbol();
+        COMMIT()
+        if (c1 == '/') {
+            //this is a comment
+            while (c1 != '\n' && c1 != '\0') {
+                c1 = lex_next_symbol();
+                COMMIT()
+            }
+        } else if (c1 == '*') {
+
+            c1 = lex_next_symbol();
+            COMMIT()
+            bool ok = false;
+            while (lex_next_symbol() != '\0') {
+                if (c1 == '*' && lex_next_symbol() == '/') {
+                    COMMIT()
+                    ok = true;
+                    break;
+                }
+                c1 = lex_next_symbol();
+                if (lex_next_symbol() != '\0')
+                    COMMIT()
+
+            }
+            if (!ok) {
+                REPORT_ERROR_WITH_POS("Compilation ERROR. Comment */ is not closed");
+                exit(0);
+            }
+
+        }
+    }
+
+    if (lex_next_symbol() == '/') comment_skipping(lex_next_symbol());
+    if (lex_next_symbol() == '\n') {
+        COMMIT();
+        comment_skipping(lex_next_symbol());;
+
+    }
+}
+
 token_t lex_next() {
     // main function of the lexer
     token_t token;
@@ -197,6 +271,8 @@ token_t lex_next() {
     // has equal or the most size in the union
     token.ident_value = nullptr;
     symbol_t c1 = lex_next_symbol();
+    COMMENT_CHECK(c1)
+    c1=lex_next_symbol();
     // retrieving current line number and offset and adding to the token
     // int curr_line = new_lines_num + 1;
     // int curr_offset = input_symbols_ptr - last_new_line_pos + 1;
