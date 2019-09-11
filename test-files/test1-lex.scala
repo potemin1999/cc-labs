@@ -6,3 +6,9 @@ def
 */
 def
 `hello`++=`cat`
+
+/* comment
+*/
+class hello `class`
+
+;1123 =++===

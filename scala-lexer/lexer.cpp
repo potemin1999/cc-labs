@@ -1,13 +1,15 @@
-//
-// Created by Ilya Potemin on 8/30/19.
-//
+/**
+ * Scala Lexer
+ *
+ * @author Ilya Potemin
+ * @author Anton Antonov
+ * @author Abdulkhamid Muminov
+ */
 
-#include <locale.h>
-#include <stdio.h>
-#include <string.h>
+#include <clocale>
+#include <cstring>
 #include <malloc.h>
 #include <cstdlib>
-#include <wchar.h>
 #include "lexer.h"
 
 #define REPORT_ERROR_WITH_POS(str) {            \
@@ -60,9 +62,6 @@
 /// returns 1 if a == "[a-zA-Z]", zero otherwise
 #define IS_LETTER(x) (((x)>='a' && ((x)<='z') || ((x)>='A' && (x)<='Z')) )
 
-/// returns 1 if a == '_', zero otherwise
-#define IS_UNDERSCORE(x) ((x)=='_')
-
 /// returns 1 if a == '`', zero otherwise
 #define IS_BACKQUOTE(x) ((x)=='`')
 
@@ -72,7 +71,7 @@
 /// limits the maximum size of literals and identifiers
 #define ACCUM_BUFFER_SIZE 256
 
-FILE *input_file = 0;
+FILE *input_file = nullptr;
 
 /// input buffer
 symbol_t lex_buffer[IN_BUFFER_SIZE];
@@ -105,24 +104,14 @@ bool isKeyword() {
                              "throw", "trait", "try", "true", "type",
                              "val", "var", "while", "with", "yield",
                              "_", ":", "=", "=>", "<-", "<:", "<%", ">:", "#", "@"};
-    int i, flag = 0;
-    for (i = 0; i < 32; ++i) {
+    for (int i = 0; i < 32; ++i) {
         if (strcmp(keywords[i], accum_buffer) == 0) {
             return true;
         }
     }
     return false;
 }
-//give him a word or char
 
-int isIdentifier(char buffer[]) {
-    char underscore = '_';
-    char dollar = '$';
-
-    int i, flag = 0;
-
-//    if(isalpha((buffer[0])) )
-}
 
 /**
  * On demand returns next symbol of the input stream via block reading of descriptor input data flow
@@ -130,18 +119,14 @@ int isIdentifier(char buffer[]) {
  * @return next symbol of lexer input stream
  */
 symbol_t lex_next_symbol() {
-    if (input_file == 0) {
+    if (input_file == nullptr) {
         input_file = stdin;
     }
-    FILE *file = input_file;
-    int a = (file == stdin);
-    size_t input_ptr = input_symbols_ptr;
-    size_t input_size = input_symbols_size;
     if (input_symbols_ptr >= input_symbols_size) {
         input_symbols_size = fread(lex_buffer, 1, IN_BUFFER_SIZE, input_file);
         if (input_symbols_size == 0) {
-            int code = 0;
-            if (code = ferror(input_file)) {
+            int code = ferror(input_file);
+            if (code) {
                 printf("error %d occurred while reading\n", code);
             }
             input_symbols_size = 0;
@@ -149,8 +134,8 @@ symbol_t lex_next_symbol() {
         }
         input_symbols_ptr = 0;
     }
-    if ((char)lex_buffer[input_symbols_ptr] == '\n' && input_symbols_ptr != last_new_line_pos){
-        new_lines_num ++;
+    if ((char) lex_buffer[input_symbols_ptr] == '\n' && input_symbols_ptr != last_new_line_pos) {
+        new_lines_num++;
         last_new_line_pos = input_symbols_ptr;
     }
     symbol_t ret = lex_buffer[input_symbols_ptr];
@@ -158,18 +143,15 @@ symbol_t lex_next_symbol() {
 }
 
 symbol_t peek() {
-    if (input_file == 0) {
+    if (input_file == nullptr) {
         input_file = stdin;
     }
-    FILE *file = input_file;
-    int a = (file == stdin);
-    size_t input_ptr = input_symbols_ptr;
-    size_t input_size = input_symbols_size;
     if (input_symbols_ptr >= input_symbols_size) {
         input_symbols_size = fread(lex_buffer, 1, IN_BUFFER_SIZE, input_file);
         if (input_symbols_size == 0) {
             int code = 0;
-            if (code = ferror(input_file)) {
+            code = ferror(input_file);
+            if (code) {
                 printf("error %d occurred while reading\n", code);
             }
             input_symbols_size = 0;
@@ -198,18 +180,9 @@ static inline int lex_accum_symbol(symbol_t symbol) {
     return ++accum_symbols_size;
 }
 
-/**
- * This function tries to build and operator sequence by given beginning
- * Is case to fetch more symbols it commits symbol read and calls lex_next_symbol()
- * @param first First symbol of operator to begin with
- * @param operator_out Pointer to the operator type variable
- * @return size of read operator in symbols
- */
-size_t lex_build_operator(symbol_t first, uint32_t *operator_out);
-
 int build_integer_literal(token_t *token, uint8_t is_hex);
 
-int build_float_literal(token_t *token, uint8_t has_exponent, uint8_t is_double);
+int build_float_literal(token_t *token, uint8_t is_double);
 
 int build_string_literal(token_t *token, uint8_t has_trailing_quotes);
 
@@ -247,7 +220,7 @@ void comment_skipping(symbol_t c1) {
 
             }
             if (!ok) {
-                REPORT_ERROR_WITH_POS("Compilation ERROR. Comment */ is not closed");
+                REPORT_ERROR_WITH_POS("Compilation ERROR. Comment */ is not closed")
                 exit(0);
             }
 
@@ -255,11 +228,6 @@ void comment_skipping(symbol_t c1) {
     }
 
     if (lex_next_symbol() == '/') comment_skipping(lex_next_symbol());
-    if (lex_next_symbol() == '\n') {
-        COMMIT();
-        comment_skipping(lex_next_symbol());;
-
-    }
 }
 
 token_t lex_next() {
@@ -272,12 +240,16 @@ token_t lex_next() {
     token.ident_value = nullptr;
     symbol_t c1 = lex_next_symbol();
     COMMENT_CHECK(c1)
-    c1=lex_next_symbol();
+
     // retrieving current line number and offset and adding to the token
     // int curr_line = new_lines_num + 1;
     // int curr_offset = input_symbols_ptr - last_new_line_pos + 1;
     token.line = new_lines_num + 1;
     token.offset = input_symbols_ptr - last_new_line_pos + 1;
+
+    while ((c1 = lex_next_symbol()) == ' ') {
+        COMMIT()
+    }
 
     if (IS_BACKQUOTE(c1)) {
         // back quote starting identifier, read everything until next backquote
@@ -285,13 +257,13 @@ token_t lex_next() {
         COMMIT()
         symbol_t next = lex_next_symbol();
         while (!IS_BACKQUOTE(next)) {
-            COMMIT();
+            COMMIT()
             if (next == '\n') { //newline is an error
                 REPORT_ERROR_WITH_POS("newlines are not allowed in back-quoted identifiers")
                 break;
             }
             if (next == '\0') { //eof is unexpected
-                REPORT_ERROR_WITH_POS("eof while reading back-quoted identifier");
+                REPORT_ERROR_WITH_POS("eof while reading back-quoted identifier")
                 break;
             }
             lex_accum_symbol(next);
@@ -377,7 +349,7 @@ token_t lex_next() {
         } while (IS_DIGIT(s) || s == '.' ||
                  s == 'e' || s == 'E' || s == '-' || s == '+' ||
                  s == 'F' || s == 'f' || s == 'D' || s == 'd');
-        build_float_literal(&token, 0, 0);
+        build_float_literal(&token, 0);
         return token;
 
         skip_parse_float_literal:
@@ -427,16 +399,15 @@ token_t lex_next() {
                 lex_accum_symbol(hex_num);
                 COMMIT()
                 hex_num = lex_next_symbol();
-                if (IS_DIGIT(hex_num)) {
-                    continue;
-                }
             } while (IS_DIGIT(hex_num));
 
+            if (hex_num == '.' || hex_num == 'E' || hex_num == 'e') {
+                lex_accum_symbol(hex_num);
+                COMMIT()
+                goto start_parse_float_literal;
+            }
             if (hex_num == 'l' || hex_num == 'L') {
                 COMMIT()
-            } else {
-                // we received symbol, which can be found in float literal only (or not)
-                goto start_parse_float_literal;
             }
             build_integer_literal(&token, 0);
             return token;
@@ -468,7 +439,7 @@ token_t lex_next() {
                 COMMIT()
             } else {
                 COMMIT()
-                symbol_t *s = (symbol_t *) &token.char_value;
+                auto s = (symbol_t *) &token.char_value;
                 *s = '\\';
                 *(s + 1) = c3;
             }
@@ -518,7 +489,6 @@ token_t lex_next() {
                 COMMIT()
                 prev = s;
                 s = lex_next_symbol();
-                int i = 0;
                 if (s == '"' && prev != '\\') {
                     break;
                 }
@@ -528,6 +498,20 @@ token_t lex_next() {
         }
         return token;
     }
+    if (c1 == '\n' || c1 == ';') {
+        token.type = TOKEN_DELIMITER;
+        token.delim = DELIM_NEWLINE;
+        COMMIT()
+        while (lex_next_symbol() == '\n') {
+            COMMIT()
+        }
+        return token;
+    }
+    if (c1 == '{' || c1 == '}') {
+        token.type = TOKEN_DELIMITER;
+        token.delim = (c1 == '{' ? DELIM_BRACE_OPEN : DELIM_BRACE_CLOSE);
+        return token;
+    }
     if (c1 == '\0') {
         token.type = TOKEN_EOF;
     }
@@ -535,7 +519,7 @@ token_t lex_next() {
 }
 
 char *token_to_string(token_t *token) {
-    char* buffer = NULL;
+    char *buffer = nullptr;
     // Additional data to add
     // char* to_add 
 
@@ -544,26 +528,18 @@ char *token_to_string(token_t *token) {
     switch (token->type) {
         case TOKEN_IDENTIFIER: {
             char *ident = token->ident_value;
-            size_t ident_len = strlen(ident);
-            buffer = new char[ident_len + 16];
-            // sprintf(buffer, "<ident=%s>", ident);
             token_name = strdup("ident");
             token_val = strdup(ident);
             break;
         }
         case TOKEN_KEYWORD: {
             char *kw = token->ident_value;
-            size_t ident_len = strlen(kw);
-            buffer = new char[ident_len + 16];
-            // sprintf(buffer, "<keyword=%s>", kw);
             token_name = strdup("keyword");
             token_val = strdup(kw);
             break;
         }
         case TOKEN_INT_LITERAL: {
             uint32_t value = token->int_value;
-            buffer = new char[32];
-            // sprintf(buffer, "<literal(integer)=%d>", value);
             token_name = strdup("literal(integer)");
             token_val = new char[256];
             sprintf(token_val, "%d", value);
@@ -571,33 +547,26 @@ char *token_to_string(token_t *token) {
         }
         case TOKEN_FLOAT_LITERAL: {
             char *float_val = token->float_value;
-            size_t float_len = strlen(float_val);
-            buffer = new char[float_len + 32];
-            // sprintf(buffer, "<literal(float)=%s>", float_val);
             token_name = strdup("literal(float)");
             token_val = strdup(float_val);
             break;
         }
         case TOKEN_CHAR_LITERAL: {
             uint32_t value = token->char_value;
-            buffer = new char[32];
             auto *value_ptr = (uint8_t *) &value;
             if (value > 256) {
                 if (value_ptr[0] == '\\') {
-                    // sprintf(buffer, "<literal(char|escape)=\\%c>", value_ptr[1]);
                     token_name = strdup("literal(char|escape)");
                     token_val = new char[256];
                     sprintf(token_val, "%c", value_ptr[1]);
                 } else {
                     setlocale(LC_ALL, "");
-                    wchar_t *wchar = (wchar_t *) (value_ptr + 2);
-                    // sprintf(buffer, "<literal(char|unicode)=%lc>", *wchar);
+                    auto wchar = (wchar_t *) (value_ptr + 2);
                     token_name = strdup("literal(char|unicode)");
                     token_val = new char[256];
                     sprintf(token_val, "%lc", *wchar);
                 }
             } else {
-                // sprintf(buffer, "<literal(char)=%c>", value);
                 token_name = strdup("literal(char)");
                 token_val = new char[256];
                 sprintf(token_val, "%c", value);
@@ -606,11 +575,31 @@ char *token_to_string(token_t *token) {
         }
         case TOKEN_STRING_LITERAL: {
             char *str = token->string_value;
-            size_t str_len = strlen(str);
-            buffer = new char[str_len + 24];
-            // sprintf(buffer, "<literal(string)=%s>", str);
             token_name = strdup("literal(string)");
             token_val = strdup(str);
+            break;
+        }
+        case TOKEN_DELIMITER: {
+            uint32_t delim = token->delim;
+            token_name = strdup("delim");
+            switch (delim) {
+                case DELIM_NEWLINE: {
+                    token_val = strdup("nl");
+                    break;
+                }
+                case DELIM_BRACE_OPEN: {
+                    token_val = strdup("{");
+                    break;
+                }
+                case DELIM_BRACE_CLOSE: {
+                    token_val = strdup("}");
+                    break;
+                }
+                default: {
+                    token_val = strdup("!unknown!");
+                    break;
+                }
+            }
             break;
         }
         case TOKEN_EOF: {
@@ -631,7 +620,7 @@ char *token_to_string(token_t *token) {
 }
 
 int build_integer_literal(token_t *token, uint8_t is_hex) {
-    size_t current = accum_symbols_size - 1;
+    int32_t current = accum_symbols_size - 1;
     uint32_t value = 0;
     uint32_t mul = 1;
     int32_t end = is_hex ? 1 : -1;
@@ -639,18 +628,19 @@ int build_integer_literal(token_t *token, uint8_t is_hex) {
     // read until the x|X expected at position 1
     while (current > end) {
         symbol_t x = accum_buffer[current];
-        int x_int = x;
         uint32_t inc = HEX_TO_INT(x);
         value += inc * mul;
         mul *= mul_mul;
         --current;
     }
+    bzero(accum_buffer, accum_symbols_size);
+    accum_symbols_size = 0;
     token->type = TOKEN_INT_LITERAL;
     token->int_value = value;
     return 0;
 }
 
-int build_float_literal(token_t *token, uint8_t has_exponent, uint8_t is_double) {
+int build_float_literal(token_t *token, uint8_t is_double) {
     size_t n_size = sizeof(symbol_t) * accum_symbols_size;
     char *float_value = new char[n_size + 1];
     bzero(float_value, n_size + 1);
@@ -672,160 +662,4 @@ int build_string_literal(token_t *token, uint8_t has_trailing_quotes) {
     token->type = TOKEN_STRING_LITERAL;
     token->float_value = str_value;
     return 0;
-}
-
-#define WRITE_OP_AND_RET(size, op) { *operator_out = op; return size; }
-
-size_t lex_build_operator(symbol_t first, uint32_t *operator_out) {
-    switch (first) {
-        case '+': {             // +,+=
-            COMMIT_AND_SHIFT(s2)
-            if (s2 == '=') {    // +=
-                COMMIT()
-                WRITE_OP_AND_RET(2, OP_ADD_ASSIGN)
-            } else {            // +
-                WRITE_OP_AND_RET(1, OP_ADD)
-            }
-        }
-        case '-': {             // -,-=
-            COMMIT_AND_SHIFT(s2)
-            if (s2 == '=') {    // -=
-                COMMIT()
-                WRITE_OP_AND_RET(2, OP_SUB_ASSIGN)
-            } else {            // -
-                WRITE_OP_AND_RET(1, OP_SUB)
-            }
-        }
-        case '*': {             //*, **, *=, **=
-            COMMIT_AND_SHIFT(s2)
-            if (s2 == '*') {    // **, **=
-                COMMIT_AND_SHIFT(s3)
-                if (s3 == '=') {// **=
-                    COMMIT()
-                    WRITE_OP_AND_RET(3, OP_EXP_ASSIGN)
-                } else {        // **
-                    WRITE_OP_AND_RET(2, OP_EXP)
-                }
-            } else if (s2 == '=') { // *=
-                COMMIT()
-                WRITE_OP_AND_RET(2, OP_MULT_ASSIGN)
-            } else {            // *
-                WRITE_OP_AND_RET(1, OP_MULT)
-            }
-        }
-        case '/': {             // /, /=
-            COMMIT_AND_SHIFT(s2)
-            if (s2 == '=') {    // /=
-                COMMIT()
-                WRITE_OP_AND_RET(2, OP_DIV_ASSIGN)
-            } else {            // /
-                WRITE_OP_AND_RET(1, OP_DIV)
-            }
-        }
-        case '%': {             // %, %=
-            COMMIT_AND_SHIFT(s2)
-            if (s2 == '=') {    // %=
-                COMMIT()
-                WRITE_OP_AND_RET(2, OP_MOD_ASSIGN)
-            } else {            // %
-                WRITE_OP_AND_RET(1, OP_MOD)
-            }
-        }
-        case '=': {             // ==,=
-            COMMIT_AND_SHIFT(s2)
-            if (s2 == '=') {    // ==
-                COMMIT()
-                WRITE_OP_AND_RET(2, OP_EQ_TO)
-            } else {            // =
-                WRITE_OP_AND_RET(1, OP_ASSIGN)
-            }
-        }
-        case '!': {             // !=, !
-            COMMIT_AND_SHIFT(s2)
-            if (s2 == '=') {    // !=
-                COMMIT()
-                WRITE_OP_AND_RET(2, OP_NEQ_TO)
-            } else {            // !
-                WRITE_OP_AND_RET(1, OP_L_NOT)
-            }
-        }
-        case '>': {             // >, >=, >>, >>>, >>=
-            COMMIT_AND_SHIFT(s2)
-            if (s2 == '>') {    // >>, >>>, >>=
-                COMMIT_AND_SHIFT(s3)
-                if (s3 == '>') {// >>>
-                    COMMIT()
-                    WRITE_OP_AND_RET(3, OP_RSH_Z)
-                } else if (s3 == '=') { // >>=
-                    COMMIT()
-                    WRITE_OP_AND_RET(3, OP_RSH_ASSIGN)
-                } else {
-                    WRITE_OP_AND_RET(2, OP_RSH)
-                }
-            } else if (s2 == '=') {// >=
-                COMMIT()
-                WRITE_OP_AND_RET(2, OP_GT_THAN_EQ_TO)
-            } else {             // >
-                WRITE_OP_AND_RET(1, OP_GT_THAN)
-            }
-        }
-        case '<': {             // <,<=, <<, <<=
-            COMMIT_AND_SHIFT(s2)
-            if (s2 == '<') {    // <<, <<=
-                COMMIT_AND_SHIFT(s3)
-                if (s3 == '=') { // <<=
-                    COMMIT()
-                    WRITE_OP_AND_RET(3, OP_LSH_ASSIGN)
-                } else {
-                    WRITE_OP_AND_RET(2, OP_LSH)
-                }
-            } else if (s2 == '=') {// <=
-                COMMIT()
-                WRITE_OP_AND_RET(2, OP_LS_THAN_EQ_TO)
-            } else {            // >
-                WRITE_OP_AND_RET(1, OP_LS_THAN)
-            }
-        }
-        case '&': {             // &&, &=, &
-            COMMIT_AND_SHIFT(s2)
-            if (s2 == '&') {    // &&
-                COMMIT()
-                WRITE_OP_AND_RET(2, OP_L_AND)
-            } else if (s2 == '=') {// &=
-                COMMIT()
-                WRITE_OP_AND_RET(2, OP_B_AND_ASSIGN)
-            } else {            // &
-                WRITE_OP_AND_RET(1, OP_B_AND)
-            }
-        }
-        case '|': {
-            // ||, |=, |
-            COMMIT_AND_SHIFT(s2)
-            if (s2 == '|') {    // ||
-                COMMIT()
-                WRITE_OP_AND_RET(2, OP_L_OR)
-            } else if (s2 == '=') {// |=
-                COMMIT()
-                WRITE_OP_AND_RET(2, OP_B_OR_ASSIGN)
-            } else {            // |
-                WRITE_OP_AND_RET(1, OP_B_OR)
-            }
-        }
-        case '^': {             // ^=, ^
-            COMMIT_AND_SHIFT(s2)
-            if (s2 == '=') {    // ^=
-                COMMIT()
-                WRITE_OP_AND_RET(2, OP_B_XOR_ASSIGN)
-            } else {
-                WRITE_OP_AND_RET(1, OP_B_XOR)
-            }
-        }
-        case '~': {             // ~
-            COMMIT()
-            WRITE_OP_AND_RET(1, OP_COMPL)
-        }
-        default: {
-            WRITE_OP_AND_RET(0, 0)
-        }
-    }
 }
