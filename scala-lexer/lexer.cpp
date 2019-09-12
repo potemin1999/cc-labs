@@ -92,6 +92,7 @@ int32_t accum_symbols_cap = ACCUM_BUFFER_SIZE;
 /// Line number and offset calculation required variables
 int new_lines_num = 0;
 int last_new_line_pos = -1;
+int prev_new_line_pos = -1;
 
 
 bool isKeyword() {
@@ -104,7 +105,7 @@ bool isKeyword() {
                              "throw", "trait", "try", "true", "type",
                              "val", "var", "while", "with", "yield",
                              "_", ":", "=", "=>", "<-", "<:", "<%", ">:", "#", "@"};
-    for (int i = 0; i < 32; ++i) {
+    for (int i = 0; i < 50; ++i) {
         if (strcmp(keywords[i], accum_buffer) == 0) {
             return true;
         }
@@ -136,6 +137,7 @@ symbol_t lex_next_symbol() {
     }
     if ((char) lex_buffer[input_symbols_ptr] == '\n' && input_symbols_ptr != last_new_line_pos) {
         new_lines_num++;
+        prev_new_line_pos = last_new_line_pos;
         last_new_line_pos = input_symbols_ptr;
     }
     symbol_t ret = lex_buffer[input_symbols_ptr];
@@ -244,11 +246,16 @@ token_t lex_next() {
     // retrieving current line number and offset and adding to the token
     // int curr_line = new_lines_num + 1;
     // int curr_offset = input_symbols_ptr - last_new_line_pos + 1;
-    token.line = new_lines_num + 1;
-    token.offset = input_symbols_ptr - last_new_line_pos + 1;
-
     while ((c1 = lex_next_symbol()) == ' ') {
         COMMIT()
+    }
+
+    if (last_new_line_pos == input_symbols_ptr) {
+        token.line = new_lines_num;
+        token.offset = input_symbols_ptr - prev_new_line_pos;
+    } else {
+        token.line = new_lines_num + 1;
+        token.offset = input_symbols_ptr - last_new_line_pos;
     }
 
     if (IS_BACKQUOTE(c1)) {
@@ -311,7 +318,7 @@ token_t lex_next() {
         COMMIT()
         symbol_t next = lex_next_symbol();
         while (IS_LETTER(next) || IS_DIGIT(next) ||
-               c1 == '_' || c1 == '$') {
+               next == '_' || next == '$') {
             lex_accum_symbol(next);
             COMMIT()
             next = lex_next_symbol();
@@ -510,8 +517,41 @@ token_t lex_next() {
     if (c1 == '{' || c1 == '}') {
         token.type = TOKEN_DELIMITER;
         token.delim = (c1 == '{' ? DELIM_BRACE_OPEN : DELIM_BRACE_CLOSE);
+        COMMIT()
         return token;
     }
+    if (c1 == '[' || c1 == ']') {
+        token.type = TOKEN_DELIMITER;
+        token.delim = (c1 == '[' ? DELIM_BRACKET_OPEN : DELIM_BRACKET_CLOSE);
+        COMMIT()
+        return token;
+    }
+    if (c1 == '(' || c1 == ')') {
+        token.type = TOKEN_DELIMITER;
+        token.delim = (c1 == '(' ? DELIM_PARENTESIS_OPEN : DELIM_PARENTESIS_CLOSE);
+        COMMIT()
+        return token;
+    }
+
+    if (c1 == '.') {
+        token.type = TOKEN_DELIMITER;
+        token.delim = DELIM_DOT;
+        COMMIT()
+        return token;
+    }
+    if (c1 == ',') {
+        token.type = TOKEN_DELIMITER;
+        token.delim = DELIM_COMMA;
+        COMMIT()
+        return token;
+    }
+    if (c1 == ':') {
+        token.type = TOKEN_DELIMITER;
+        token.delim = DELIM_COLON;
+        COMMIT()
+        return token;
+    }
+
     if (c1 == '\0') {
         token.type = TOKEN_EOF;
     }
@@ -593,6 +633,34 @@ char *token_to_string(token_t *token) {
                 }
                 case DELIM_BRACE_CLOSE: {
                     token_val = strdup("}");
+                    break;
+                }
+                case DELIM_BRACKET_OPEN: {
+                    token_val = strdup("[");
+                    break;
+                }
+                case DELIM_BRACKET_CLOSE: {
+                    token_val = strdup("]");
+                    break;
+                }
+                case DELIM_PARENTESIS_OPEN: {
+                    token_val = strdup("(");
+                    break;
+                }
+                case DELIM_PARENTESIS_CLOSE: {
+                    token_val = strdup(")");
+                    break;
+                }
+                case DELIM_DOT: {
+                    token_val = strdup(".");
+                    break;
+                }
+                case DELIM_COMMA: {
+                    token_val = strdup(",");
+                    break;
+                }
+                case DELIM_COLON: {
+                    token_val = strdup(":");
                     break;
                 }
                 default: {
