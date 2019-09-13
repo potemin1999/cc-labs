@@ -5,7 +5,7 @@
 #ifndef CC_LABS_LEXER_H
 #define CC_LABS_LEXER_H
 
-#include <stdint.h>
+#include <cstdint>
 
 /// Identifier token
 /// Contains char *ident_value
@@ -14,6 +14,8 @@
 /// Keyword token
 /// Contains uint32_t keyword
 #define TOKEN_KEYWORD 2U
+
+#define TOKEN_DELIMITER 4U
 
 /// Bool literal
 /// Contains bool_t bool_value
@@ -30,6 +32,9 @@
 /// String literal
 /// Contains char *string_value;
 #define TOKEN_STRING_LITERAL 11U
+
+/// Char literal
+#define TOKEN_CHAR_LITERAL  12U
 
 #define TOKEN_EOF            255U
 
@@ -48,13 +53,17 @@ typedef struct {
     uint8_t type;
     union {
         uint32_t keyword;
-        uint32_t operator;
+        uint32_t oper;
+        uint32_t delim;
         bool_t bool_value;
-        int32_t int_value;
-        float float_value;
+        uint32_t int_value;
+        char *float_value;
+        uint32_t char_value;
         char *string_value;
     };
     char *ident_value;
+    int line;
+    int offset;
 } token_t;
 
 /**
@@ -82,6 +91,18 @@ char *token_to_string(token_t *token);
 
 //TODO: add other keywords and fix numbers
 #define KEYWORD_IF      0x00000001U
+
+#define DELIM_NEWLINE       0x00000001U
+#define DELIM_BRACE_OPEN    0x00000002U
+#define DELIM_BRACE_CLOSE   0x00000003U
+#define DELIM_BRACKET_OPEN    0x00000004U
+#define DELIM_BRACKET_CLOSE   0x00000005U
+#define DELIM_PARENTESIS_OPEN    0x00000006U
+#define DELIM_PARENTESIS_CLOSE   0x00000007U
+#define DELIM_DOT           0x00000008U
+#define DELIM_COMMA           0x00000009U
+#define DELIM_COLON           0x00000010U
+
 
 ///Arithmetic Operators
 #define OP_ADD              0x00000001U //  +  // Addition
