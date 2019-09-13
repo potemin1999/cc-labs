@@ -17,7 +17,7 @@
     char buffer[str_len + 32];                  \
     sprintf(buffer,"at position %d : %s",       \
             input_symbols_ptr,str);             \
-    on_lex_error(buffer);                       \
+        on_lex_error(buffer);                       \
     }
 
 #define COMMIT() ++input_symbols_ptr;
@@ -241,7 +241,6 @@ token_t lex_next() {
     // has equal or the most size in the union
     token.ident_value = nullptr;
     symbol_t c1 = lex_next_symbol();
-    COMMENT_CHECK(c1)
 
     // retrieving current line number and offset and adding to the token
     // int curr_line = new_lines_num + 1;
@@ -249,6 +248,8 @@ token_t lex_next() {
     while ((c1 = lex_next_symbol()) == ' ') {
         COMMIT()
     }
+
+    COMMENT_CHECK(c1)
 
     if (last_new_line_pos == input_symbols_ptr) {
         token.line = new_lines_num;
