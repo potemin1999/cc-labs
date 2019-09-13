@@ -95,6 +95,14 @@ char *token_to_string(token_t *token);
 #define DELIM_NEWLINE       0x00000001U
 #define DELIM_BRACE_OPEN    0x00000002U
 #define DELIM_BRACE_CLOSE   0x00000003U
+#define DELIM_BRACKET_OPEN    0x00000004U
+#define DELIM_BRACKET_CLOSE   0x00000005U
+#define DELIM_PARENTESIS_OPEN    0x00000006U
+#define DELIM_PARENTESIS_CLOSE   0x00000007U
+#define DELIM_DOT           0x00000008U
+#define DELIM_COMMA           0x00000009U
+#define DELIM_COLON           0x00000010U
+
 
 ///Arithmetic Operators
 #define OP_ADD              0x00000001U //  +  // Addition
